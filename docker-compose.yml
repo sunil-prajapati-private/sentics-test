@@ -1,0 +1,41 @@
+services:
+  mqtt:
+    image: eclipse-mosquitto:2
+    ports: ["1883:1883"]
+    volumes:
+      - mqtt-data:/mosquitto/data
+      - ./infra/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mosquitto_sub -h localhost -t '$$SYS/broker/uptime' -C 1 >/dev/null 2>&1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+  cloud:
+    build: ./cloud
+    environment: ["MQTT_HOST=mqtt", "MQTT_PORT=1883", "SITE_ID=site-1"]
+    ports: ["8000:8000"]
+    depends_on:
+      mqtt: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/healthz\")'"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+  onprem:
+    build: ./onprem
+    environment: ["MQTT_HOST=mqtt", "MQTT_PORT=1883", "SITE_ID=site-1"]
+    ports: ["8001:8001"]
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001"]
+    depends_on:
+      mqtt: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8001/healthz\")'"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+  frontend:
+    build: ./frontend
+    ports: ["5173:5173"]
+    depends_on: [cloud]
+volumes:
+  mqtt-data:

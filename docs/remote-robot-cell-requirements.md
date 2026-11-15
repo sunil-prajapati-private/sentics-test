@@ -1,0 +1,3 @@
+# Requirements baseline
+
+The assessment is a local simulation: FastAPI cloud, React UI, separate Python on-prem service, MQTT broker, and Docker Compose. One site has cell 1 (Robot 1: A/B/C) and cell 2 (Robot 2: C/D/E). Cloud submits jobs and renders authoritative on-prem reports; on-prem validates, queues, executes, pauses, resumes, and persists. Required states are `pending → received → queued → running → done|failed|rejected`. Enrollment precedes work. Offline submissions remain pending, recover after reconnect, and are deduplicated. Person-entered events pause only the affected cell on-prem; person-left permits safe resume. No physical robot or cloud account is in scope.
