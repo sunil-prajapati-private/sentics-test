@@ -11,7 +11,9 @@ services:
       timeout: 3s
       retries: 10
   cloud:
-    build: ./cloud
+    build:
+      context: .
+      dockerfile: cloud/Dockerfile
     environment: ["MQTT_HOST=mqtt", "MQTT_PORT=1883", "SITE_ID=site-1"]
     ports: ["8000:8000"]
     depends_on:
@@ -22,7 +24,9 @@ services:
       timeout: 3s
       retries: 10
   onprem:
-    build: ./onprem
+    build:
+      context: .
+      dockerfile: onprem/Dockerfile
     environment: ["MQTT_HOST=mqtt", "MQTT_PORT=1883", "SITE_ID=site-1"]
     ports: ["8001:8001"]
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001"]
@@ -35,7 +39,7 @@ services:
       retries: 10
   frontend:
     build: ./frontend
-    ports: ["5173:5173"]
+    ports: ["5173:80"]
     depends_on: [cloud]
 volumes:
   mqtt-data:

@@ -33,3 +33,19 @@
 - Phase 6: added durable queued-job reconstruction, safe restart handling for ambiguous running executions, duplicate replay protection, on-prem cell occupancy persistence, safety pause/resume, unsafe-cell start blocking, and deterministic offline/safety demo scripts.
 - Phase 6 verification: `python3 -m unittest discover -s tests -v` passed (22 tests); Python compilation passed.
 - Phase 6 skipped: Compose/Mosquitto integration and browser recording because Docker and Node are unavailable.
+
+- Date/phase: 2026-11-16 / Phase 7
+- Files changed: added `README.md` with repository layout, initialization, Compose usage, verification commands, reliability/safety boundaries, demo flow, and current limitations.
+- Verification: `./scripts/dev/doctor.sh` found Python 3.14.6 and Node v26.5.0/npm 11.17.0; `python3 -m unittest discover -s tests -v` passed (22 tests); `python3 -m compileall cloud onprem shared tests` passed; `git diff --check` passed.
+- Browser smoke check: Chrome opened `file:///Users/sunilprajapati/Desktop/sentics-test/README.md` and visibly rendered the generated README content.
+- Initialization/runtime limits: `./scripts/dev/setup.sh` created `.venv` but dependency installation could not resolve `pypi.org`; FastAPI is therefore unavailable for a live API check. Docker is missing, so Compose/Mosquitto integration cannot run. `npm install --no-audit --no-fund` was started but could not complete with the available network; frontend build was not claimed.
+- Phase 7 status: documentation baseline and deterministic checks complete; live service, Compose, and frontend runtime evidence remain pending host dependency/network availability.
+
+- Runtime/code review follow-up: added `harness/code_review/phase7-runtime-review.md` with prioritized findings. P0 findings are the missing `CloudStore` import in `cloud/app/main.py` and missing `shared/` package in both Python images; P1 findings include unwired MQTT runtime paths and the frontend nginx/Compose port mismatch.
+- Follow-up verification: the 22-test suite, Python compilation, and `git diff --check` passed again. `docker compose config` could not run because Docker is not installed. `npx playwright --version` could not complete because the package was unavailable without network access. Chrome permissions were available for a local README smoke check, but no application runtime was available to test.
+- Test warning: the passing suite emitted `ResourceWarning` messages for unclosed SQLite connections in `onprem/app/execution.py:40`; this is recorded as a cleanup concern, not a test failure.
+
+- Phase 7 fixes: removed the invalid duplicate `CloudStore` construction from `cloud/app/main.py`; changed cloud and on-prem Docker builds to use repository-root context and copy `shared/`; corrected frontend publication to `5173:80` for nginx.
+- Architecture review: added `harness/code_review/architecture-review.md`. It confirms the intended ownership boundary but records remaining runtime gaps: no MQTT lifecycle wiring, default in-memory service stores, unreachable on-prem scheduler/safety handlers, anonymous MQTT, and a static frontend.
+- Post-fix checks: unit tests 22/22 passed; Python compilation passed; YAML parsing and Docker build-input path checks passed; Docker image build, Compose logs, and Playwright application tests remain blocked by missing Docker and unavailable package-network access.
+- README follow-up: added a manual application/server guide covering Compose startup, per-service health checks, browser inspection, valid and invalid job requests, SSE verification, offline/safety scenarios, log capture, and shutdown. It explicitly distinguishes current HTTP-skeleton behavior from flows that still require MQTT/UI runtime wiring.
