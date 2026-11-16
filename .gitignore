@@ -5,6 +5,8 @@ __pycache__/
 .ruff_cache/
 node_modules/
 dist/
+*.tsbuildinfo
+test-results/
 .env
 *.sqlite3
 infra/mosquitto/data/

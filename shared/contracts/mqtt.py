@@ -9,6 +9,8 @@ def topic(site,direction,kind,identifier=''):
     if identifier: parts.append(identifier)
     return '/'.join(parts)
 def cloud_job_topic(site,job_id): return topic(site,'cloud','commands','jobs/'+job_id)
+def cloud_safety_topic(site,cell_id): return topic(site,'cloud','commands','safety/'+cell_id)
+def cloud_cancel_topic(site,job_id): return topic(site,'cloud','commands','cancel/'+job_id)
 def cloud_enrollment_topic(site,robot_id=''): return topic(site,'cloud','commands','enrollment'+(('/'+robot_id) if robot_id else ''))
 def onprem_enrollment_topic(site,robot_id=''): return topic(site,'onprem','events','enrollment'+(('/'+robot_id) if robot_id else ''))
 def onprem_status_topic(site,job_id): return topic(site,'onprem','events','jobs/'+job_id)

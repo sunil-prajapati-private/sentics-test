@@ -3,12 +3,12 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 class JobStatus(StrEnum):
-    PENDING='pending'; RECEIVED='received'; QUEUED='queued'; RUNNING='running'; PAUSED='paused'; DONE='done'; FAILED='failed'; REJECTED='rejected'
+    PENDING='pending'; RECEIVED='received'; QUEUED='queued'; RUNNING='running'; PAUSED='paused'; DONE='done'; FAILED='failed'; REJECTED='rejected'; CANCELLED='cancelled'
 
-PUBLIC_TERMINAL={JobStatus.DONE, JobStatus.FAILED, JobStatus.REJECTED}
+PUBLIC_TERMINAL={JobStatus.DONE, JobStatus.FAILED, JobStatus.REJECTED, JobStatus.CANCELLED}
 _ALLOWED={
  JobStatus.PENDING:{JobStatus.RECEIVED,JobStatus.REJECTED}, JobStatus.RECEIVED:{JobStatus.QUEUED,JobStatus.REJECTED},
- JobStatus.QUEUED:{JobStatus.RUNNING,JobStatus.REJECTED}, JobStatus.RUNNING:{JobStatus.DONE,JobStatus.FAILED,JobStatus.PAUSED},
+ JobStatus.QUEUED:{JobStatus.RUNNING,JobStatus.REJECTED,JobStatus.CANCELLED}, JobStatus.RUNNING:{JobStatus.DONE,JobStatus.FAILED,JobStatus.PAUSED},
  JobStatus.PAUSED:{JobStatus.RUNNING,JobStatus.FAILED}, JobStatus.DONE:set(), JobStatus.FAILED:set(), JobStatus.REJECTED:set(),
 }
 

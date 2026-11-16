@@ -1,4 +1,12 @@
 services:
+  mongo:
+    image: mongo:8
+    volumes: [mongo-data:/data/db]
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --eval 'db.runCommand({ ping: 1 }).ok' | grep 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
   mqtt:
     image: eclipse-mosquitto:2
     ports: ["1883:1883"]
@@ -14,21 +22,32 @@ services:
     build:
       context: .
       dockerfile: cloud/Dockerfile
-    environment: ["MQTT_HOST=mqtt", "MQTT_PORT=1883", "SITE_ID=site-1"]
+    environment: ["MQTT_HOST=mqtt", "MQTT_PORT=1883", "SITE_ID=site-1", "CLOUD_DB_PATH=/data/cloud.sqlite3", "MONGO_URL=${MONGO_URL:-mongodb://mongo:27017}", "MONGO_DB=${MONGO_DB:-remote_robot_cell_identity}", "JWT_SECRET=${JWT_SECRET:-local-compose-secret-change-me}"]
     ports: ["8000:8000"]
+    volumes: [cloud-data:/data]
     depends_on:
       mqtt: {condition: service_healthy}
+      mongo: {condition: service_healthy}
     healthcheck:
       test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/healthz\")'"]
       interval: 5s
       timeout: 3s
       retries: 10
+  seed-users:
+    build:
+      context: .
+      dockerfile: cloud/Dockerfile
+    command: ["python", "-m", "app.seed"]
+    environment: ["MONGO_URL=${MONGO_URL:-mongodb://mongo:27017}", "MONGO_DB=${MONGO_DB:-remote_robot_cell_identity}", "SEED_OPERATOR_USERNAME=${SEED_OPERATOR_USERNAME:-operator1}", "SEED_OPERATOR_PASSWORD=${SEED_OPERATOR_PASSWORD:-operator1-password}", "SEED_SUPERVISOR_USERNAME=${SEED_SUPERVISOR_USERNAME:-supervisor1}", "SEED_SUPERVISOR_PASSWORD=${SEED_SUPERVISOR_PASSWORD:-supervisor1-password}"]
+    depends_on:
+      mongo: {condition: service_healthy}
   onprem:
     build:
       context: .
       dockerfile: onprem/Dockerfile
-    environment: ["MQTT_HOST=mqtt", "MQTT_PORT=1883", "SITE_ID=site-1"]
+    environment: ["MQTT_HOST=mqtt", "MQTT_PORT=1883", "SITE_ID=site-1", "ONPREM_DB_PATH=/data/onprem.sqlite3"]
     ports: ["8001:8001"]
+    volumes: [onprem-data:/data]
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001"]
     depends_on:
       mqtt: {condition: service_healthy}
@@ -40,6 +59,10 @@ services:
   frontend:
     build: ./frontend
     ports: ["5173:80"]
-    depends_on: [cloud]
+    depends_on:
+      cloud: {condition: service_healthy}
 volumes:
+  mongo-data:
   mqtt-data:
+  cloud-data:
+  onprem-data:

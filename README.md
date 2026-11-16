@@ -14,7 +14,7 @@ system.
 ## Repository layout
 
 ```text
-cloud/       FastAPI service and cloud SQLite persistence
+cloud/       FastAPI service, cloud operational persistence, and Mongo identity store
 frontend/    React/Vite operator UI scaffold
 onprem/      On-prem service, scheduler, persistence, and safety controller
 shared/      Envelope, MQTT topic, capability, and state-transition contracts
@@ -32,6 +32,7 @@ The intended local stack uses:
 - Python 3.11+ (the current environment uses Python 3.14.6)
 - Node.js and npm for the frontend
 - Docker and Docker Compose for Mosquitto and service containers
+- MongoDB is started by Compose for identity users; operational job history remains in separate cloud/on-prem SQLite stores to preserve the PDF's local persistence and MQTT ownership boundaries.
 
 Check the local toolchain with:
 
@@ -95,11 +96,26 @@ python3 -m compileall cloud onprem shared tests
 git diff --check
 ```
 
+Install the HTTP test-client dependency and run the local runtime smoke check:
+
+```bash
+./.venv/bin/pip install -r test-requirements.txt
+PYTHONPATH=. .venv/bin/python scripts/test/runtime-smoke.py
+```
+
 When the required tools are installed, also run:
 
 ```bash
 docker compose config
 cd frontend && npm install && npm run build
+```
+
+For the browser smoke test, start the stack first and run from `frontend/`:
+
+```bash
+npm install
+npx playwright install chromium
+npm run test:e2e
 ```
 
 The Phase 6 deterministic demonstrations are:
@@ -118,11 +134,14 @@ The Phase 6 deterministic demonstrations are:
 - Enrollment persistence and on-prem enrollment enforcement.
 - Per-robot serialized queues with independent robot execution.
 - Deterministic failure injection.
+- `JOB_DURATION_SECONDS` controls simulated execution length (default `3`); `failure_mode=timeout` exercises one bounded retry, while `always_fail` produces a deterministic failure.
 - Duplicate command and status-message protection.
 - Queue reconstruction after restart.
 - Safe handling of an ambiguous persisted running job using
   `restart_recovery_ambiguous`.
 - Persisted per-cell occupancy and on-prem safety pause/resume behavior.
+- Cloud-projected robot state (`idle`, `busy`, `paused`) and heartbeat-based online status.
+- MQTT-routed safety simulation, queued-job cancellation, configurable execution duration, and bounded timeout retry.
 
 ## Reliability and safety boundary
 
@@ -139,6 +158,34 @@ receives projections and cannot directly approve safety or resume a robot.
 See [docs/architecture.md](docs/architecture.md) and
 [docs/mqtt-contract.md](docs/mqtt-contract.md) for the detailed boundaries and
 message contract.
+
+## Authentication and seeded operators
+
+Authentication is an added security layer; it is not specified by the take-home
+PDF. The cloud API uses MongoDB for identity records and an HTTP-only JWT cookie
+for sessions. Job submission, safety events, cancellation, job history, robot
+projections, and SSE require an active session. Health checks remain public for
+Compose health checks. There is no public signup endpoint.
+
+`docker compose up --build` starts MongoDB and runs the idempotent `seed-users`
+service. It creates these active local demonstration users:
+
+| Username | Password | Role |
+| --- | --- | --- |
+| `operator1` | `operator1-password` | operator |
+| `supervisor1` | `supervisor1-password` | supervisor |
+
+Change the seed values before using this outside a local assessment. The seed
+uses an upsert, so rerunning setup does not create duplicate users. User records
+have an `active` flag and login rejects inactive users; activation is an
+administrative database operation rather than public signup.
+
+The browser opens at `http://localhost:5173`, shows the login screen, and keeps
+the session in an HTTP-only cookie. Direct API clients must first call
+`POST /auth/login` and retain the returned cookie.
+
+The login form intentionally does not pre-fill a username or password. Use the
+seeded values above manually when testing locally.
 
 ## Demonstration flow
 
@@ -213,9 +260,10 @@ Open `http://localhost:5173` in Chrome or another browser. Confirm that:
 4. The application displays the expected robot/job view once the UI flow is
    implemented.
 
-At the current repository state, the frontend is still a static scaffold. It
-does not yet submit jobs or consume the cloud event stream, so a browser check
-can verify only page loading until the UI integration is completed.
+The frontend submits jobs and safety simulation events through the cloud API,
+listens to the SSE event stream, and shows enrollment, robot-state, online, and
+job projections. The browser check should therefore cover page rendering and
+the actions below. The browser never calls the on-prem service directly.
 
 ### 4. Submit a valid cloud job
 
@@ -283,8 +331,9 @@ For the full Compose demonstration, capture these steps and expected results:
 7. Confirm active work pauses and new work cannot start in that cell.
 8. Send person-left and confirm safe resume.
 
-The last four steps require the on-prem MQTT runtime and UI controls to be
-wired. They are not currently available through the running HTTP skeleton.
+The Compose runtime now wires these events through the on-prem controller and
+publishes job status projections back to the cloud. Physical robot motion is
+still simulated.
 
 ### 8. Stop the servers and preserve evidence
 
@@ -300,14 +349,39 @@ MQTT commands is only a health-check pass, not an end-to-end pass.
 ## Current verification status
 
 The build evidence is maintained in [harness/build-log.md](harness/build-log.md).
-The repository currently has deterministic Python tests for Phases 2–6. Docker,
-Mosquitto integration, and browser recording depend on host tooling and must be
-verified separately. The frontend source is still a minimal operator UI
-scaffold, so it should not be presented as a complete live dashboard.
+The repository has deterministic Python tests, a FastAPI runtime smoke path,
+frontend build/lint and Playwright checks, and a verified Docker/Mosquitto
+Compose run covering both-robot jobs, offline replay, safety pause/resume,
+heartbeats, cancellation, and timeout retry. A screen recording still needs to
+be captured separately for the take-home submission.
 
 ## Project phases
 
-The human-gated roadmap is in [PLANS.md](PLANS.md). Phase 7 is documentation
-and review: README, architecture and contract documentation, trade-offs,
-recording instructions, code review, security review, and final evidence. Stop
-at human review after those artifacts are complete.
+Phase 7 covers documentation, runtime review, security review, test evidence,
+and the final operator workflow.
+
+## Additional engineering notes: how AI was used responsibly
+
+AI assistance was used as a review and implementation accelerator, while the
+repository kept human-checkable boundaries:
+
+- Requirements were extracted from the take-home PDF before implementation;
+  PDF requirements were kept separate from optional security enhancements.
+- The MQTT-only cloud/on-prem boundary and on-prem safety authority were treated
+  as invariants before changing code.
+- Changes were kept incremental and reversible: shared contracts, persistence,
+  runtime wiring, UI, authentication, and documentation were reviewed as
+  separate concerns.
+- Security decisions were made explicit. MongoDB stores identity records,
+  passwords are PBKDF2 hashes, sessions use HTTP-only JWT cookies, and there is
+  no public signup route. Sample credentials are documented but never embedded
+  in the login form.
+- Reliability claims were tested at the application boundary. Durable message
+  IDs, deduplication, execution claims, monotonic transitions, and offline
+  replay were verified rather than inferred from MQTT QoS alone.
+- Deterministic tests cover contracts, queues, safety, restart recovery, and
+  failure modes. Frontend lint, TypeScript build, Playwright, Compose config,
+  Docker builds, live service health, login, and protected API access were also
+  run where the environment supported them.
+- Review artifacts record residual limits clearly: the system simulates robot
+  motion, and a screen recording remains a manual submission step.

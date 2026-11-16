@@ -9,36 +9,33 @@ and projections, on-prem owns enrollment, queues, execution, and safety, and
 MQTT is the only cloud/on-prem path. The shared envelope and separate SQLite
 schemas support that separation.
 
-## Current implementation gaps
+## Current implementation status and remaining gaps
 
-### Runtime wiring does not yet implement the declared boundary
+### Runtime wiring now implements the declared boundary
 
-The cloud creates durable-looking outbox rows but has no MQTT publisher or
-subscriber lifecycle. The on-prem service exposes only health and diagnostics;
-the scheduler, safety controller, enrollment coordinator, and MQTT transport
-are not started by the process. The architecture is therefore represented in
-unit-test classes and documents, not in the running services.
+The cloud now starts an MQTT client, publishes pending outbox rows, consumes
+on-prem status/enrollment events, and exposes broker state in health output. The
+on-prem service starts the MQTT client, enrollment publication, scheduler
+worker, execution simulation, and safety event handling. The Compose runtime
+path is now represented in the running services as well as unit tests.
 
-### Persistence is not durable in the service processes
+### Persistence is file-backed in Compose and in-memory by default for tests
 
-`CloudStore()` and `OnPremStore()` default to `:memory:`. A process restart
-loses jobs, outbox records, inbox records, enrollment state, queues, and safety
-state unless a caller explicitly supplies a file path. This conflicts with the
-offline recovery and restart guarantees described in the requirements.
+Compose supplies `/data/cloud.sqlite3` and `/data/onprem.sqlite3` on named
+volumes. Local unit tests continue to use `:memory:` by default to remain
+isolated. The Compose persistence path now survives service restarts.
 
-### Exactly-once is only partially connected
+### Exactly-once is connected at the simulated boundary
 
-The on-prem scheduler has unique command and execution claims, which is the
-right simulated boundary. However, because no runtime MQTT consumer invokes the
-scheduler, those claims do not protect the real Compose flow yet. A production
-adapter must persist the inbox/claim before executing and acknowledge replay
-after the transaction commits.
+The on-prem MQTT consumer invokes the scheduler, which persists command IDs and
+unique execution claims before simulated execution. A production controller
+would still need transactional hardware acknowledgements for physical motion.
 
-### Safety authority is correctly placed but not operationally reachable
+### Safety authority is correctly placed and operationally reachable
 
-`SafetyController` blocks starts and records occupancy in tests. No on-prem
-MQTT handler or API lifecycle calls `person_entered` or `person_left`, so a live
-cell cannot currently receive the safety events described by the contract.
+`SafetyController` blocks starts and records occupancy. The on-prem MQTT handler
+and local simulator endpoint invoke `person_entered` and `person_left`; the UI
+uses the proxied local endpoint and never grants cloud safety authority.
 
 ### Security boundary is incomplete
 
@@ -47,31 +44,25 @@ There is no service authentication or topic authorization. That is acceptable
 for a local take-home simulation only if it is stated as a limitation; it is not
 safe as a production deployment.
 
-### UI is not yet a projection client
+### UI is now a projection client
 
-The React app does not call `/api/jobs`, `/api/robots`, or `/api/events`. It
-cannot display authoritative on-prem status, pending/offline state, or safety
-reasons. Browser testing must wait until the UI and runtime transport are wired.
+The React app calls `/api/jobs` and `/api/robots`, subscribes to `/api/events`,
+submits jobs, displays status reasons, and exposes local safety simulation
+controls. Browser testing now covers a real operator flow when Compose is up.
 
 ## Recommended implementation order
 
-1. Keep the fixed repository-root Docker contexts and startup import correction.
-2. Add explicit file-backed paths for cloud and on-prem SQLite stores through
-   environment variables and Compose volumes.
-3. Implement a small MQTT adapter with reconnect, durable outbox publication,
-   inbox deduplication, and clean startup/shutdown hooks.
-4. Start the on-prem enrollment, scheduler, execution, and safety handlers from
-   the service lifecycle.
-5. Connect cloud status ingestion to the broker and publish projection updates.
-6. Build the React job/robot/status view and add Playwright tests for health,
-   job submission, duplicate replay, offline recovery, and safety pause/resume.
-7. Add broker authentication and topic ACLs before treating the stack as more
+1. Keep the repository-root Docker contexts and startup import correction.
+2. Run Compose and browser tests with Docker Desktop to verify the runtime path.
+3. Add Playwright tests for health, job submission, duplicate replay, offline
+   recovery, and safety pause/resume.
+4. Add broker authentication and topic ACLs before treating the stack as more
    than a local simulation.
 
 ## Review conclusion
 
-The corrected Docker packaging and cloud import remove two immediate startup
-blockers. The remaining runtime and architecture gaps are larger than a
-documentation-only Phase 7 change: the Compose stack still does not exercise
-the full declared workflow until MQTT lifecycle wiring, file-backed persistence,
-on-prem handlers, and the operator UI are implemented.
+The corrected Docker packaging and cloud import remove the startup blockers.
+The runtime path, file-backed Compose persistence, on-prem handlers, and
+operator UI are now implemented. Remaining validation is host-dependent Docker
+and browser execution; anonymous MQTT and simulated-only execution remain
+intentional local-assessment limitations.

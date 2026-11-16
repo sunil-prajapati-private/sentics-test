@@ -1,4 +1,4 @@
-.PHONY: help setup doctor up down logs lint test test-integration test-e2e review security-review demo-happy demo-offline demo-safety docs-check
+.PHONY: help setup doctor up down logs lint test test-e2e review security-review demo-offline demo-safety docs-check
 help:
 	@grep -E '^[a-z-]+:' Makefile | sed 's/:.*//'
 setup:
@@ -11,5 +11,19 @@ down:
 	docker compose down
 logs:
 	docker compose logs -f
-lint test test-integration test-e2e review security-review demo-happy demo-offline demo-safety docs-check:
-	@echo "$@ is defined for later phases; see commands/$@.md"
+lint:
+	cd frontend && npm run lint
+test:
+	python3 -m unittest discover -s tests -v
+test-e2e:
+	cd frontend && npm run test:e2e
+review:
+	@cat harness/code_review/take-home-pdf-gap-review.md
+security-review:
+	@cat harness/code_review/architecture-review.md
+demo-offline:
+	./scripts/demo/phase6-offline.sh
+demo-safety:
+	./scripts/demo/phase6-safety.sh
+docs-check:
+	git diff --check

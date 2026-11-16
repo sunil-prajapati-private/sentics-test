@@ -1,4 +1,4 @@
-from .execution import RobotScheduler, JobCommand
+from .execution import RobotScheduler, JobCommand, locked
 from shared.contracts import CAPABILITIES, JobStatus
 
 class SafetyController(RobotScheduler):
@@ -17,6 +17,7 @@ class SafetyController(RobotScheduler):
         if self.occupied.get(cell,False):
             return None
         return super().run_next(robot_id,now)
+    @locked
     def person_entered(self, cell_id, event_id, now='now'):
         if cell_id not in {v[0] for v in CAPABILITIES.values()}:
             raise ValueError('unknown cell')
@@ -31,6 +32,7 @@ class SafetyController(RobotScheduler):
             self.paused[robot]=job_id
             return self._event(job_id,JobStatus.PAUSED,'person_in_cell')
         return {'cell_id':cell_id,'state':'occupied','reason':'person_in_cell'}
+    @locked
     def person_left(self, cell_id, event_id, now='now'):
         if cell_id not in {v[0] for v in CAPABILITIES.values()}: raise ValueError('unknown cell')
         if not self.occupied.get(cell_id,False): return None

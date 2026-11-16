@@ -54,12 +54,14 @@ README renders from the local filesystem; it did not verify the React app or API
 - Invariant: cloud and on-prem must use the same versioned envelope and domain
   contracts.
 
-### P1 — Compose does not run the implemented on-prem workflow
+### P1 — Compose did not run the implemented on-prem workflow (fixed in working tree)
 
 - Location: `onprem/app/main.py:9-11`
-- Problem: the on-prem HTTP service exposes only `/healthz` and a diagnostics
-  endpoint reporting `mode: skeleton`. No MQTT client, scheduler, enrollment,
-  execution, or safety controller is wired into the process.
+- Problem: the original on-prem HTTP service exposed only health and skeleton
+  diagnostics. No runtime handlers were started.
+- Fix applied: the service now starts MQTT, enrollment publication, scheduler
+  execution, persistent safety handling, diagnostics, and local safety-event
+  simulation.
 - Impact: a healthy container would still not process cloud commands, publish
   status, or demonstrate offline/safety behavior.
 - Evidence: the process entrypoint contains only two routes; the scheduler and
@@ -68,12 +70,12 @@ README renders from the local filesystem; it did not verify the React app or API
   claiming Compose end-to-end behavior.
 - Invariant: on-prem owns acceptance, execution, queueing, and safety.
 
-### P1 — Cloud API has no runtime MQTT publisher or consumer
+### P1 — Cloud API had no runtime MQTT publisher or consumer (fixed in working tree)
 
 - Location: `cloud/app/main.py:29-38`, `cloud/app/service.py:5-16`
-- Problem: job creation writes an outbox row, but no worker publishes that row to
-  MQTT. `ingest_status` exists as a helper but is not connected to a broker
-  subscription.
+- Problem: the original job creation path only wrote an outbox row.
+- Fix applied: cloud startup now connects paho MQTT, publishes pending outbox
+  rows, and consumes status/enrollment events.
 - Impact: jobs remain pending and live status cannot flow through the declared
   cloud/on-prem boundary.
 - Evidence: no paho client, background task, or outbox loop exists in the cloud
@@ -96,22 +98,25 @@ README renders from the local filesystem; it did not verify the React app or API
   a health check. Verify with a browser request after the image starts.
 - Invariant: documented local URLs must resolve to the running service.
 
-### P2 — Safety state is not exposed through the running service
+### P2 — Safety state was not exposed through the running service (fixed in working tree)
 
 - Location: `onprem/app/safety.py`, `onprem/app/main.py`
-- Problem: the safety controller exists only as a testable class; the service
-  has no endpoint or MQTT handler for person-entered/person-left events.
+- Problem: the original safety controller existed only as a testable class.
+- Fix applied: MQTT safety events and `/api/safety/events` now invoke the
+  controller and persist occupancy.
 - Impact: the safety invariant is covered by unit tests but cannot be exercised
   through the declared runtime path.
 - Suggested fix: connect safety event ingestion to the on-prem process and emit
   durable status events.
 - Invariant: a person in a cell must pause/block work on-prem immediately.
 
-### P2 — Frontend is still a Phase 1 placeholder
+### P2 — Frontend was a Phase 1 placeholder (fixed in working tree)
 
 - Location: `frontend/src/main.tsx:5-6`
-- Problem: the UI renders only static text and does not call the cloud API or
-  subscribe to the event stream.
+- Problem: the original UI rendered only static text.
+- Fix applied: the React console now submits jobs, consumes SSE projections,
+  displays robots/jobs, and sends local safety simulation events through the
+  on-prem proxy.
 - Impact: browser testing cannot verify job submission, live status, enrollment,
   offline recovery, or safety reasons.
 - Suggested fix: implement the operator flow and add Playwright tests once the
